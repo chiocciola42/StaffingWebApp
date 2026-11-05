@@ -6,7 +6,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import { formatCurrency } from '../utils/formatters';
 import { useAuth } from '../context/AuthContext';
 import ErrorBoundary from '../components/ErrorBoundary';
-import { apiFetch, isLocalPreview } from '../services/apiClient';
+import { apiFetch } from '../services/apiClient';
 import { useFetchData } from '../context/AppContext';
 import { DataTable, ColumnDef } from '../components/DataTable';
 
@@ -161,10 +161,6 @@ const DbInspectorPage: React.FC = () => {
     };
 
     const handleExport = async (dialect: 'postgres' | 'mysql') => {
-        if (isLocalPreview()) {
-            addToast('L\'esportazione SQL non è disponibile in modalità Preview (Mock).', 'warning');
-            return;
-        }
         if (dialect === 'postgres') setIsExportingPg(true);
         else setIsExportingMysql(true);
     

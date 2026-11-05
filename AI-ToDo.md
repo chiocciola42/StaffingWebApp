@@ -46,7 +46,7 @@
 ### Piano
 - [x] Implementa test per hooks: useGlobalSearch, useComputedSkills, useExport
 - [x] Implementa test per componenti: Toast, ConfirmationModal
-- [x] Implementa test per servizi: apiClient (isLocalPreview, apiFetch con retry/backoff)
+- [x] Implementa test per servizi: apiClient (apiFetch con retry/backoff)
 - [x] Implementa test per exportTableUtils e paths
 - [x] Esegui tutti i test e correggi gli errori trovati
 - [x] Commit e push

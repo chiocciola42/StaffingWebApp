@@ -183,10 +183,8 @@ This is **not** a monorepo. Most source files live at the repository root rather
 │   ├── useExport.ts               # Export functionality
 │   └── useGlobalSearch.ts         # Global search
 │
-├── services/                # API client and mock engine
-│   ├── apiClient.ts         # HTTP client with auth, retries, mock interception
-│   ├── mockData.ts          # Development mock data (initial state)
-│   └── mockHandlers.ts      # Mock request router with localStorage persistence
+├── services/                # API client
+│   └── apiClient.ts         # HTTP client with auth and bounded retries
 │
 ├── utils/                   # Utility modules
 │   ├── api.ts               # authorizedFetch / authorizedJsonFetch helpers
@@ -306,13 +304,7 @@ Server-side utilities shared across Vercel functions live in `api/_lib/`. Files 
 - **`api/_lib/auth.ts`** — Shared JWT verification helpers: `verifyAdmin(req)` asserts ADMIN role; `getUserFromRequest(req)` extracts user `{ id, username, role }` from Bearer token. Exports `OPERATIONAL_ROLES` (`['ADMIN', 'MANAGER', 'MANAGER_EXT', 'SENIOR MANAGER', 'SENIOR MANAGER_EXT', 'ASSOCIATE DIRECTOR', 'ASSOCIATE DIRECTOR_EXT', 'MANAGING DIRECTOR', 'MANAGING DIRECTOR_EXT']`) and `ALL_MANAGEABLE_ENTITIES` (the single-source-of-truth entity list for visibility control).
 - **`api/_lib/schema.ts`** — Full database schema DDL. `ensureDbTablesExist()` is called lazily on first request. Includes `role_entity_visibility` table seeded with all non-ADMIN roles × all manageable entities, `is_visible = TRUE` by default (backward-compatible).
 
-**Local/Preview Mode:** `apiClient.ts` detects non-production environments by checking the hostname/port and intercepts all `/api/*` calls, routing them to the in-memory mock engine (`mockHandlers.ts` + `mockData.ts`).
-
-Mock detection triggers for: `localhost`, `127.0.0.1`, non-standard ports, `webcontainer`, `stackblitz`, `vercel-preview`, `google-ai-studio`, `usercontent.goog`, `googleusercontent.com`, hosts without a dot (intranet).
-
-The mock engine **persists to `localStorage`** under key `staffing_planner_local_db_v1`, merging writes with `INITIAL_MOCK_DATA` on read.
-
-API calls use `apiFetch()` from `services/apiClient.ts` which handles auth headers (Bearer JWT from `localStorage`), retries with exponential backoff, and mock interception.
+API calls use `apiFetch()` from `services/apiClient.ts` which handles auth headers (Bearer JWT from `localStorage`), and bounded retries with exponential backoff.
 
 ### Database
 
@@ -496,16 +488,14 @@ contracts          → requires projects + clients
 4. Choose the appropriate domain context and add state + CRUD operations there.
 5. Add the entity to the `initialize()` call in `AppContext.tsx` coordinator.
 6. Include the entity in `api/data.ts` bulk fetch, wrapping the return with `canSee('entity_key') ? data : []`.
-7. Add mock data to `services/mockData.ts`.
-8. If the entity should be visibility-controlled: add it to `ENTITY_VISIBILITY_CONTROLLED` in `api/resources.ts` (line ~636), to `MANAGEABLE_ENTITIES` in `SecurityCenterPage.tsx`, to the DB seed in `api/_lib/schema.ts`, and to the mock seed in `services/mockData.ts`. Optionally add any dependency rules to `ENTITY_VISIBILITY_DEPS`.
-9. Add a `hasEntityVisibility('entity_key')` guard to the page component (after all hooks, before the main return).
+7. If the entity should be visibility-controlled: add it to `ENTITY_VISIBILITY_CONTROLLED` in `api/resources.ts` (line ~636), to `MANAGEABLE_ENTITIES` in `SecurityCenterPage.tsx`, to the DB seed in `api/_lib/schema.ts`. Optionally add any dependency rules to `ENTITY_VISIBILITY_DEPS`.
+8. Add a `hasEntityVisibility('entity_key')` guard to the page component (after all hooks, before the main return).
 
 **If the entity needs a dedicated endpoint:**
 1. Create a new file in `api/` (e.g., `api/my-endpoint.ts`). Do **not** put it inside `api/_lib/`.
 2. Export a default async handler: `export default async function handler(req, res)`.
 3. Import `db` from `api/_lib/db.ts` and `env` from `api/_lib/env.ts`.
 4. The endpoint is automatically available at `/api/my-endpoint` on Vercel.
-5. Add a mock handler branch in `services/mockHandlers.ts`.
 
 ### Adding a new API endpoint
 
@@ -514,6 +504,6 @@ contracts          → requires projects + clients
 3. Import `db` from `api/_lib/db.ts` and `env` from `api/_lib/env.ts` for database/env access.
 4. The endpoint is automatically available at `/api/my-endpoint` on Vercel.
 
-### Running locally without a database
+### Running locally
 
-The app automatically falls back to mock mode when running on localhost or preview environments. The mock engine in `services/mockHandlers.ts` handles all `/api/*` calls with initial data from `services/mockData.ts`, persisting mutations to `localStorage` (`staffing_planner_local_db_v1`).
+A PostgreSQL database (`POSTGRES_URL`) and `JWT_SECRET` are required; see `.env.example`.

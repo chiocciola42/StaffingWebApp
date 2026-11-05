@@ -73,10 +73,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const { getBreadcrumb } = useRoutesManifest();
   const breadcrumbs = getBreadcrumb(location.pathname);
   
-  const isMockMode = window.location.hostname === 'localhost' || 
-                    window.location.hostname.includes('webcontainer') || 
-                    window.location.hostname.includes('usercontent.goog');
-
   return (
     <header className="flex-shrink-0 bg-surface border-b border-outline-variant sticky top-0 z-30">
       <div className="flex items-center justify-between p-4 h-20">
@@ -106,12 +102,6 @@ const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
                 </li>
               ))}
             </ol>
-            {isMockMode && (
-              <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
-                <span className="w-2 h-2 rounded-full bg-yellow-400 mr-1.5 animate-pulse"></span>
-                Demo / Mock Mode
-              </span>
-            )}
           </div>
         </nav>
 

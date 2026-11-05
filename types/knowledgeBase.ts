@@ -32,7 +32,7 @@ export interface KBArticle {
     createdAt: string;       // ISO 8601
     updatedAt: string;       // ISO 8601
     linkedEntities: LinkedEntity[];
-    /** Versione di concorrenza ottimistica gestita lato backend/mock. */
+    /** Versione di concorrenza ottimistica gestita lato backend. */
     version?: number;
 }
 

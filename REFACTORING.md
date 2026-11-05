@@ -87,18 +87,16 @@ Regola d'oro: **mai** spuntare un task se anche uno solo dei gate è rosso.
 
 ### DB-03 — [P1] Unificare le QUATTRO fonti di verità dello schema
 
-- [ ] **Problema.** Lo schema del DB è definito/duplicato in **quattro** posti che
+- [ ] **Problema.** Lo schema del DB è definito/duplicato in **tre** posti che
   possono divergere (e già divergono, vedi DB-01/DB-02):
   1. `api/_lib/schema.ts` — DDL runtime (fonte "vera")
   2. `api/export.ts` — DDL rigenerato a mano per il dump
   3. `scripts/seed.js` — assume tabelle + colonne
-  4. `services/mockData.ts` + `services/mockHandlers.ts` — replica shape ed logica per la modalità locale
-  Ogni nuova colonna va aggiornata in 4 punti: fonte primaria di bug di drift.
-- **Evidenza.** `api/_lib/schema.ts`, `api/export.ts:40-60`, `scripts/seed.js`, `services/mockHandlers.ts`.
+  Ogni nuova colonna va aggiornata in 3 punti: fonte primaria di bug di drift.
+- **Evidenza.** `api/_lib/schema.ts`, `api/export.ts:40-60`, `scripts/seed.js`.
 - **Proposta.** Estrarre un modulo unico `api/_lib/schemaDefinition.ts` che descrive
   tabelle e colonne come dati (array di DDL o metadati), consumato da: `schema.ts`
-  (esecuzione), `export.ts` (dump), `seed.js` (via import). Il mock resta separato ma
-  con un test di contratto che verifica che i campi mock siano un sottoinsieme dello schema.
+  (esecuzione), `export.ts` (dump), `seed.js` (via import).
 - **File impattati.** nuovo `api/_lib/schemaDefinition.ts`, `api/_lib/schema.ts`, `api/export.ts`, `scripts/seed.js`.
 - **Rischio.** Medio (tocca il bootstrap). Fare a piccoli passi, un consumatore alla volta.
 - **Accettazione.** Il DDL esiste in un solo file; `export.ts` e `schema.ts` producono la stessa struttura tabellare (verificabile con un test di snapshot).

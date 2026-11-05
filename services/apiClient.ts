@@ -1,11 +1,8 @@
-
 /**
  * @file services/apiClient.ts
- * @description Client API con intercettore per ambiente di Preview locale.
+ * @description Client HTTP verso le API dell'applicazione: header di autenticazione,
+ * retry con backoff esponenziale a tentativi limitati.
  */
-
-import { mockFetch } from './mockHandlers';
-import { INITIAL_MOCK_DATA } from './mockData';
 
 export interface ApiClientOptions {
     retries?: number;
@@ -15,7 +12,12 @@ export interface ApiClientOptions {
     tokenProvider?: () => string | null;
 }
 
-const defaultTokenProvider = () => (typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null);
+type ApiError = Error & { isClientError?: boolean; status?: number };
+
+const MAX_RETRIES = 10;
+
+const defaultTokenProvider = (): string | null =>
+    typeof localStorage !== 'undefined' ? localStorage.getItem('authToken') : null;
 
 const resolveAuthHeaders = (strategy: ApiClientOptions['authStrategy'], token: string | null): HeadersInit => {
     if (strategy === 'none') return {};
@@ -23,52 +25,30 @@ const resolveAuthHeaders = (strategy: ApiClientOptions['authStrategy'], token: s
     return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-/**
- * Rileva se l'applicazione sta girando in un ambiente di Preview o di sviluppo.
- * Esteso per coprire le sandbox di Google AI Studio e Vercel.
- */
-export const isLocalPreview = () => {
-  if (typeof window === 'undefined') return false;
-  
-  const h = window.location.hostname;
-  const p = window.location.port;
+const isClientStatus = (status: number): boolean => status >= 400 && status < 500 && status !== 429;
 
-  // Se l'host contiene questi termini o ha una porta non standard, siamo in preview
-  return (
-    h === 'localhost' || 
-    h === '127.0.0.1' || 
-    p !== '' && p !== '80' && p !== '443' || 
-    h.includes('webcontainer') || 
-    h.includes('stackblitz') || 
-    h.includes('vercel-preview') ||
-    h.includes('google-ai-studio') ||
-    h.includes('ais-dev-') ||
-    h.includes('ais-pre-') ||
-    h.includes('usercontent.goog') || // Sandbox Google
-    h.includes('googleusercontent.com') ||
-    h.includes('internal') ||
-    !h.includes('.') // Intranet/Local hosts
-  );
+const buildError = async (response: Response): Promise<ApiError> => {
+    const body = (await response.json().catch(() => ({}))) as { error?: string };
+    const error: ApiError = new Error(body.error || `API request failed: ${response.status}`);
+    error.status = response.status;
+    error.isClientError = isClientStatus(response.status);
+    return error;
+};
+
+const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
+
+const requestOnce = async <T>(url: string, options: RequestInit, headers: HeadersInit): Promise<T> => {
+    const response = await fetch(url, { ...options, headers });
+    if (response.status === 204) return null as T;
+    if (!response.ok) throw await buildError(response);
+    return (await response.json()) as T;
 };
 
 /**
- * Funzione fetch potenziata per interagire con le API dell'applicazione.
- * Intercetta TUTTE le chiamate /api in ambiente Preview e le devia al Mock Engine.
+ * Esegue una richiesta alle API con autenticazione e retry limitato.
+ * Gli errori 4xx (tranne 429) non vengono ritentati.
  */
 export const apiFetch = async <T = unknown>(url: string, options: RequestInit = {}, clientOptions: ApiClientOptions = {}): Promise<T> => {
-    // LOGICA DI INTERCETTAZIONE MOCK (PREVIEW)
-    if (isLocalPreview()) {
-        try {
-            return await mockFetch(url, options) as T;
-        } catch (e) {
-            // Fallback d'emergenza: restituiamo dati coerenti per non bloccare l'UI
-            if (url.includes('/api/data')) return INITIAL_MOCK_DATA as unknown as T;
-            if (url.includes('notifications') || Array.isArray(INITIAL_MOCK_DATA)) return [] as unknown as T;
-            return {} as T;
-        }
-    }
-
-    // LOGICA API REALE (PRODUZIONE)
     const {
         retries = 3,
         retryDelayMs = 500,
@@ -77,41 +57,21 @@ export const apiFetch = async <T = unknown>(url: string, options: RequestInit = 
         tokenProvider = defaultTokenProvider,
     } = clientOptions;
 
-    const token = tokenProvider();
+    const maxRetries = Math.min(Math.max(retries, 0), MAX_RETRIES);
     const headers: HeadersInit = {
         'Content-Type': 'application/json',
-        ...resolveAuthHeaders(authStrategy, token),
+        ...resolveAuthHeaders(authStrategy, tokenProvider()),
         ...options.headers,
     };
 
-    let attempt = 0;
     let delay = retryDelayMs;
-
-    while (true) {
+    for (let attempt = 0; ; attempt += 1) {
         try {
-            const response = await fetch(url, { ...options, headers });
-
-            if (response.status === 204) return null as T;
-
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({}));
-                const errorMessage = (errorBody as { error?: string }).error || `API request failed: ${response.status}`;
-                const error = new Error(errorMessage) as Error & { isClientError?: boolean; status?: number };
-                error.status = response.status;
-
-                if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-                    error.isClientError = true;
-                    throw error;
-                }
-                throw error;
-            }
-
-            return await response.json();
+            return await requestOnce<T>(url, options, headers);
         } catch (error) {
-            const typedError = error as Error & { isClientError?: boolean };
-            if (typedError.isClientError || attempt >= retries) throw typedError;
-            await new Promise(resolve => setTimeout(resolve, delay));
-            attempt += 1;
+            const typed = error as ApiError;
+            if (typed.isClientError || attempt >= maxRetries) throw typed;
+            await sleep(delay);
             delay *= backoffFactor;
         }
     }
