@@ -2,7 +2,7 @@
  * @file context/KnowledgeBaseContext.tsx
  * @description Contesto per la gestione delle schede della Knowledge Base.
  * Contesto isolato e auto-sufficiente: carica le proprie schede al montaggio via apiFetch
- * (intercettato dal mock engine in preview/test) e fornisce le operazioni CRUD.
+ * e fornisce le operazioni CRUD.
  * Segue lo stesso pattern dei sub-context di dominio (es. SkillsContext).
  */
 
